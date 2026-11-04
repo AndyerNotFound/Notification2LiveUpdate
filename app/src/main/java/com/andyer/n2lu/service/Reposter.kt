@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
 import android.os.Build
+import android.os.Bundle
 import android.os.SystemClock
 import androidx.annotation.RequiresApi
 import com.andyer.n2lu.R
@@ -130,8 +131,15 @@ object Reposter {
             .setVibrate(null)
             .setCategory(Notification.CATEGORY_PROGRESS)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
-            .setColorized(true)
             .setColor(ACCENT)
+
+        when (PromotionSupport.mode(context)) {
+            PromotionSupport.Mode.OPT_IN -> builder.addExtras(
+                Bundle().apply { putBoolean(PromotionSupport.EXTRA_REQUEST_PROMOTED_ONGOING, true) }
+            )
+            PromotionSupport.Mode.LEGACY_COLORIZED -> builder.setColorized(true)
+            PromotionSupport.Mode.UNSUPPORTED -> Unit
+        }
 
         if (prefs.showSourceApp) builder.setSubText(info.appLabel)
         if (info.chronometer) {

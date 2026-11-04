@@ -288,12 +288,13 @@ private fun SystemCard(
             onAction = onRequestNotifications,
         )
         if (status.promotionSupported) {
+            val modeLabel = if (status.promotionOptIn) "QPR1 请求模式" else "旧版彩色模式"
             StatusRow(
                 title = "实时更新资格",
                 subtitle = if (status.promotionAllowed) {
-                    "系统允许本应用使用实时更新"
+                    "系统允许本应用使用实时更新（$modeLabel）"
                 } else {
-                    "系统尚未允许，点击前往系统设置开启"
+                    "系统尚未允许，点击前往系统设置开启（$modeLabel）"
                 },
                 ok = status.promotionAllowed,
                 actionText = if (status.promotionAllowed) null else "去开启",

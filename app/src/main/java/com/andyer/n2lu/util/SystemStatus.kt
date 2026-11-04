@@ -8,12 +8,14 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import com.andyer.n2lu.service.NluListenerService
+import com.andyer.n2lu.service.PromotionSupport
 
 data class StatusSnapshot(
     val notificationAccess: Boolean,
     val notificationsEnabled: Boolean,
     val promotionSupported: Boolean,
     val promotionAllowed: Boolean,
+    val promotionOptIn: Boolean,
 ) {
     val sdkInt: Int get() = Build.VERSION.SDK_INT
 }
@@ -29,6 +31,7 @@ object SystemStatus {
             notificationsEnabled = NotificationManagerCompat.from(application).areNotificationsEnabled(),
             promotionSupported = Build.VERSION.SDK_INT >= 36,
             promotionAllowed = canPromote(application),
+            promotionOptIn = PromotionSupport.mode(application) == PromotionSupport.Mode.OPT_IN,
         )
     }
 
