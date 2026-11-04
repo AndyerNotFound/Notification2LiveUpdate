@@ -102,6 +102,14 @@ object Reposter {
         }
     }
 
+    fun isPromoted(context: Context, key: String): Boolean? {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return null
+        val posted = runCatching {
+            manager.activeNotifications.firstOrNull { it.tag == tagOf(key) && it.id == idOf(key) }
+        }.getOrNull() ?: return null
+        return (posted.notification.flags and Notification.FLAG_PROMOTED_ONGOING) != 0
+    }
+
     fun cancelAll(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         runCatching {

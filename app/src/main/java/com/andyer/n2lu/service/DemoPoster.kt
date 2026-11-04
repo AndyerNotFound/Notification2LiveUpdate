@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 
 object DemoPoster {
 
-    private const val DEMO_KEY = "n2lu|demo"
+    const val DEMO_KEY = "n2lu|demo"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
 

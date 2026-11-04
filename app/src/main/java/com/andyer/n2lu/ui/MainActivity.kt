@@ -3,6 +3,7 @@ package com.andyer.n2lu.ui
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -52,8 +53,15 @@ private fun AppRoot() {
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) {
+    ) { granted ->
         status = SystemStatus.snapshot(context)
+        if (!granted) {
+            Toast.makeText(
+                context,
+                "未授予通知权限。若系统不再弹窗，请在「应用通知设置」里手动开启。",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -82,11 +90,37 @@ private fun AppRoot() {
                     DemoPoster.stop(context)
                 }
             },
-            onOpenAccess = { SystemStatus.openNotificationAccess(context) },
-            onOpenPromotion = { SystemStatus.openPromotionSettings(context) },
+            onOpenAccess = {
+                if (!SystemStatus.openNotificationAccess(context)) {
+                    Toast.makeText(
+                        context,
+                        "打不开通知使用权设置页，请在系统设置里手动查找「通知使用权」。",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            },
+            onOpenPromotion = {
+                if (!status.promotionPermissionDeclared) {
+                    Toast.makeText(
+                        context,
+                        "当前安装包没有声明 POST_PROMOTED_NOTIFICATIONS，请确认版本是 0.3.0 及以上。",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                } else if (!SystemStatus.openPromotionSettings(context)) {
+                    Toast.makeText(
+                        context,
+                        "此系统没有「实时更新」设置页（需要 Android 16 QPR1），提升由系统自动判定。",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            },
             onRequestNotifications = {
                 if (Build.VERSION.SDK_INT >= 33 && !status.notificationsEnabled) {
                     permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else if (!status.notificationsEnabled) {
+                    if (!SystemStatus.openAppNotificationSettings(context)) {
+                        SystemStatus.openAppDetails(context)
+                    }
                 }
             },
             onOpenApps = { screen = Screen.Apps },

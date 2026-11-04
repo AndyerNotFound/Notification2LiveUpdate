@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
@@ -16,13 +17,25 @@ data class StatusSnapshot(
     val promotionSupported: Boolean,
     val promotionAllowed: Boolean,
     val promotionOptIn: Boolean,
+    val promotionPermissionDeclared: Boolean,
+    val promotionPermissionGranted: Boolean,
+    val promotionSettingsAvailable: Boolean,
+    val sdkIntFull: Int,
 ) {
     val sdkInt: Int get() = Build.VERSION.SDK_INT
+
+    val sdkLabel: String
+        get() = if (sdkIntFull >= 10_000) {
+            "API ${sdkIntFull / 10_000}.${(sdkIntFull % 10_000) / 100}"
+        } else {
+            "API $sdkInt"
+        }
 }
 
 object SystemStatus {
 
     private const val ENABLED_LISTENERS = "enabled_notification_listeners"
+    const val PROMOTION_PERMISSION = "android.permission.POST_PROMOTED_NOTIFICATIONS"
 
     fun snapshot(context: Context): StatusSnapshot {
         val application = context.applicationContext
@@ -32,6 +45,10 @@ object SystemStatus {
             promotionSupported = Build.VERSION.SDK_INT >= 36,
             promotionAllowed = canPromote(application),
             promotionOptIn = PromotionSupport.mode(application) == PromotionSupport.Mode.OPT_IN,
+            promotionPermissionDeclared = isPromotionPermissionDeclared(application),
+            promotionPermissionGranted = isPromotionPermissionGranted(application),
+            promotionSettingsAvailable = isPromotionSettingsAvailable(application),
+            sdkIntFull = sdkIntFull(),
         )
     }
 
@@ -50,46 +67,85 @@ object SystemStatus {
         }.getOrDefault(false)
     }
 
-    fun openNotificationAccess(context: Context) {
+    fun isPromotionPermissionDeclared(context: Context): Boolean = runCatching {
+        val info = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+        info.requestedPermissions?.contains(PROMOTION_PERMISSION) == true
+    }.getOrDefault(false)
+
+    fun isPromotionPermissionGranted(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < 36) return false
+        return runCatching {
+            context.checkSelfPermission(PROMOTION_PERMISSION) == PackageManager.PERMISSION_GRANTED
+        }.getOrDefault(false)
+    }
+
+    fun isPromotionSettingsAvailable(context: Context): Boolean = runCatching {
+        context.packageManager.resolveActivity(
+            Intent(Settings.ACTION_APP_NOTIFICATION_PROMOTION_SETTINGS),
+            0,
+        ) != null
+    }.getOrDefault(false)
+
+    fun sdkIntFull(): Int = runCatching {
+        Build.VERSION::class.java.getField("SDK_INT_FULL").getInt(null)
+    }.getOrDefault(Build.VERSION.SDK_INT * 100)
+
+    fun openNotificationAccess(context: Context): Boolean {
         val component = ComponentName(context, NluListenerService::class.java)
-        val detail = if (Build.VERSION.SDK_INT >= 30) {
-            Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
-                .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, component.flattenToString())
-        } else {
-            null
-        }
-        val opened = detail != null && runCatching {
-            context.startActivity(detail.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }.isSuccess
-        if (!opened) {
-            runCatching {
-                context.startActivity(
-                    Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val candidates = buildList {
+            if (Build.VERSION.SDK_INT >= 30) {
+                add(
+                    Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                        .putExtra(
+                            Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
+                            component.flattenToString(),
+                        )
                 )
             }
+            add(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            add(appNotificationIntent(context))
         }
+        return startFirst(context, candidates)
     }
 
-    fun openPromotionSettings(context: Context) {
-        if (Build.VERSION.SDK_INT < 36) {
-            openAppNotificationSettings(context)
-            return
-        }
-        val opened = runCatching {
-            context.startActivity(
-                Intent(Settings.ACTION_APP_NOTIFICATION_PROMOTION_SETTINGS)
-                    .putExtra(Intent.EXTRA_PACKAGE_NAME, context.packageName)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    fun openPromotionSettings(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT >= 36) {
+            return startFirst(
+                context,
+                listOf(
+                    Intent(Settings.ACTION_APP_NOTIFICATION_PROMOTION_SETTINGS)
+                        .putExtra(Intent.EXTRA_PACKAGE_NAME, context.packageName),
+                    appNotificationIntent(context),
+                ),
             )
-        }.isSuccess
-        if (!opened) openAppNotificationSettings(context)
+        }
+        return startFirst(context, listOf(appNotificationIntent(context)))
     }
 
-    fun openAppNotificationSettings(context: Context) {
-        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+    fun openAppNotificationSettings(context: Context): Boolean =
+        startFirst(context, listOf(appNotificationIntent(context)))
+
+    fun openAppDetails(context: Context): Boolean = startFirst(
+        context,
+        listOf(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(android.net.Uri.parse("package:" + context.packageName)),
+        ),
+    )
+
+    private fun appNotificationIntent(context: Context): Intent =
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
             .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { context.startActivity(intent) }
+
+    private fun startFirst(context: Context, intents: List<Intent>): Boolean {
+        for (intent in intents) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val resolvable = runCatching {
+                context.packageManager.resolveActivity(intent, 0) != null
+            }.getOrDefault(false)
+            if (!resolvable) continue
+            if (runCatching { context.startActivity(intent) }.isSuccess) return true
+        }
+        return false
     }
 }

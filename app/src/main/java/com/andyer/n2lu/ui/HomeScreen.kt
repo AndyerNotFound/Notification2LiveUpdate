@@ -2,6 +2,7 @@ package com.andyer.n2lu.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -41,6 +42,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,7 +62,12 @@ import com.andyer.n2lu.data.PrefsBus
 import com.andyer.n2lu.data.TriggerMode
 import com.andyer.n2lu.service.DemoPoster
 import com.andyer.n2lu.service.PostResult
+import com.andyer.n2lu.service.Reposter
 import com.andyer.n2lu.util.StatusSnapshot
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -79,6 +86,7 @@ fun HomeScreen(
     onOpenApps: () -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val revision by PrefsBus.revision.collectAsState()
     var testMessage by remember { mutableStateOf<String?>(null) }
     val selectedCount = remember(revision) { prefs.allowedPackages.size }
@@ -100,6 +108,8 @@ fun HomeScreen(
     ) {
         HeroCard(
             enabled = prefs.enabled,
+            hasAccess = status.notificationAccess,
+            hasNotifications = status.notificationsEnabled,
             onEnabledChange = onEnabledChanged,
         )
         SystemCard(
@@ -108,6 +118,7 @@ fun HomeScreen(
             onOpenPromotion = onOpenPromotion,
             onRequestNotifications = onRequestNotifications,
         )
+        DiagnosticsCard(status = status, versionName = versionName)
         RulesCard(prefs = prefs, selectedCount = selectedCount, onOpenApps = onOpenApps)
         AdvancedCard(prefs = prefs)
         TestCard(
@@ -123,6 +134,17 @@ fun HomeScreen(
                     is PostResult.Failed -> "发送失败：${result.reason}"
                     else -> "内容未变化，已跳过"
                 }
+                scope.launch {
+                    delay(1800)
+                    val promoted = withContext(Dispatchers.IO) {
+                        Reposter.isPromoted(context, DemoPoster.DEMO_KEY)
+                    }
+                    testMessage = when (promoted) {
+                        true -> "系统已提升：状态栏应出现胶囊，通知栏里会显示实时更新卡片。"
+                        false -> "通知已发布，但系统没有提升。请对照上方诊断信息检查权限与资格。"
+                        null -> "通知没有出现在活动列表中，可能被系统拦截。"
+                    }
+                }
             },
         )
         EventsCard(
@@ -134,7 +156,12 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HeroCard(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
+private fun HeroCard(
+    enabled: Boolean,
+    hasAccess: Boolean,
+    hasNotifications: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -177,7 +204,12 @@ private fun HeroCard(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                text = if (enabled) "正在监听横幅通知，并转换为实时更新" else "转换已关闭，点击右上角开关启用",
+                text = when {
+                    !hasAccess -> "第一步：授予通知使用权，否则读不到其他应用的通知"
+                    !hasNotifications -> "第二步：允许通知权限，否则转换结果不会显示"
+                    enabled -> "正在监听横幅通知，并转换为实时更新"
+                    else -> "转换已关闭，点击右上角开关启用"
+                },
                 color = Color.White.copy(alpha = 0.85f),
                 fontSize = 13.sp,
             )
@@ -307,6 +339,77 @@ private fun SystemCard(
                 ok = false,
             )
         }
+    }
+}
+
+@Composable
+private fun DiagnosticsCard(status: StatusSnapshot, versionName: String) {
+    SectionCard {
+        SectionTitle("诊断信息", "没有出现在实时更新名单时，先看这里")
+        Spacer(Modifier.height(8.dp))
+        DiagText("应用版本", versionName)
+        DiagText("系统", "${Build.VERSION.RELEASE} · ${status.sdkLabel} · ${Build.DISPLAY}")
+        DiagFlag("提升权限声明", status.promotionPermissionDeclared)
+        DiagFlag("提升权限授予", status.promotionPermissionGranted)
+        DiagFlag("系统允许提升", status.promotionAllowed)
+        DiagFlag("提升设置页", status.promotionSettingsAvailable)
+        DiagText(
+            "判定模式",
+            when {
+                !status.promotionSupported -> "不支持（需要 Android 16）"
+                status.promotionOptIn -> "QPR1 请求模式"
+                else -> "旧版彩色模式"
+            },
+        )
+        if (!status.promotionPermissionDeclared) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "安装包没有请求 POST_PROMOTED_NOTIFICATIONS，系统设置里不会出现本应用的实时更新开关。0.3.0 起才包含该权限。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DiagText(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(96.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun DiagFlag(label: String, value: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(96.dp),
+        )
+        Text(
+            text = if (value) "✓ 是" else "✗ 否",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (value) Color(0xFF10B981) else MaterialTheme.colorScheme.error,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
