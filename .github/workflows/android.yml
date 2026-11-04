@@ -17,6 +17,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -31,11 +35,18 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Restore debug keystore
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: n2lu-debug-keystore-v1
+      - name: Decode signing keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/n2lu-release.p12"
+            chmod 600 "$RUNNER_TEMP/n2lu-release.p12"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/n2lu-release.p12" >> "$GITHUB_ENV"
+            echo "Signing with the project release key"
+          else
+            echo "::warning::No signing key configured - using the ephemeral debug key"
+          fi
 
       - name: Install Android SDK 36
         run: |
@@ -49,11 +60,17 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew --no-daemon --stacktrace assembleDebug
 
+      - name: Verify APK signature
+        run: |
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk \
+            | grep -E "Verified using|SHA-256 digest"
+
       - name: Rename APK
         run: |
           mkdir -p out
           cp app/build/outputs/apk/debug/app-debug.apk \
-             "out/Notification2LiveUpdate-${GITHUB_REF_NAME//\//-}-debug.apk"
+             "out/Notification2LiveUpdate-${GITHUB_REF_NAME//\//-}.apk"
 
       - name: Generate checksums
         run: cd out && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt
@@ -61,7 +78,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Notification2LiveUpdate-debug
+          name: Notification2LiveUpdate
           path: out/*.apk
           if-no-files-found: error
 

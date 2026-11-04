@@ -47,7 +47,9 @@
 sha256sum -c SHA256SUMS.txt
 ```
 
-> CI 产物使用 debug 签名，不同构建批次签名可能不同。若要长期覆盖升级，请用固定 keystore 自行构建 release 包，或配置签名 Secrets。
+> 从 **v0.3.0** 起，CI 使用项目固定签名密钥（保存在 GitHub Actions Secrets）签署 APK，后续版本可直接覆盖安装。v0.1.0 / v0.2.0 是每次构建随机生成的 debug 签名，从这两个版本升级需要先卸载一次。
+>
+> 签名证书 SHA-256：`F5:7F:0B:36:0B:07:56:63:3A:10:CC:4C:30:9C:61:F4:48:C9:01:03:74:35:01:BA:1A:D5:FD:15:FC:A6:41:4F`
 
 ## 使用
 
@@ -127,7 +129,17 @@ Android 16 不允许应用自己设置 `FLAG_PROMOTED_ONGOING`，只能由系统
 # 产物：app/build/outputs/apk/debug/app-debug.apk
 ```
 
-CI 在 `.github/workflows/android.yml` 中完成同样的构建，并在推送 `v*` 标签时自动创建 Release。
+如需使用固定密钥签名（CI 即如此），在构建前设置：
+
+```bash
+export ANDROID_KEYSTORE_PATH=/path/to/release.p12
+export ANDROID_KEYSTORE_PASSWORD=...
+export ANDROID_KEY_ALIAS=n2lu
+export ANDROID_KEY_PASSWORD=...
+./gradlew assembleDebug
+```
+
+未设置这些变量时回退到 AGP 自动生成的 debug 签名。CI 在 `.github/workflows/android.yml` 中从 Secrets 解码密钥、构建、校验签名，并在推送 `v*` 标签时自动创建 Release（含 `SHA256SUMS.txt`）。
 
 ## 目录结构
 
