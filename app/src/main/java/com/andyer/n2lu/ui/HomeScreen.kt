@@ -81,6 +81,7 @@ fun HomeScreen(
     onOpenAccess: () -> Unit,
     onOpenPromotion: () -> Unit,
     onRequestNotifications: () -> Unit,
+    onOpenUsageAccess: () -> Unit,
     onOpenApps: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -111,9 +112,11 @@ fun HomeScreen(
         )
         SystemCard(
             status = status,
+            hideInForeground = prefs.hideWhenSourceForeground,
             onOpenAccess = onOpenAccess,
             onOpenPromotion = onOpenPromotion,
             onRequestNotifications = onRequestNotifications,
+            onOpenUsageAccess = onOpenUsageAccess,
         )
         DiagnosticsCard(status = status, versionName = versionName)
         RulesCard(prefs = prefs, selectedCount = selectedCount, onOpenApps = onOpenApps)
@@ -284,9 +287,11 @@ private fun LivePreview() {
 @Composable
 private fun SystemCard(
     status: StatusSnapshot,
+    hideInForeground: Boolean,
     onOpenAccess: () -> Unit,
     onOpenPromotion: () -> Unit,
     onRequestNotifications: () -> Unit,
+    onOpenUsageAccess: () -> Unit,
 ) {
     SectionCard {
         SectionTitle("系统状态", "实时更新需要通知使用权，并且系统为 Android 16 及以上")
@@ -336,6 +341,19 @@ private fun SystemCard(
                 ok = false,
             )
         }
+        if (hideInForeground) {
+            StatusRow(
+                title = "使用情况访问",
+                subtitle = if (status.usageAccess) {
+                    "已授权，源应用回到前台时会收起实时更新"
+                } else {
+                    "未授权，无法判断前台应用；点击前往系统设置授予"
+                },
+                ok = status.usageAccess,
+                actionText = if (status.usageAccess) null else "去授权",
+                onAction = onOpenUsageAccess,
+            )
+        }
     }
 }
 
@@ -350,6 +368,7 @@ private fun DiagnosticsCard(status: StatusSnapshot, versionName: String) {
         DiagFlag("提升权限授予", status.promotionPermissionGranted)
         DiagFlag("系统允许提升", status.promotionAllowed)
         DiagFlag("提升设置页", status.promotionSettingsAvailable)
+        DiagFlag("使用情况访问", status.usageAccess)
         DiagText(
             "判定模式",
             when {
@@ -500,6 +519,18 @@ private fun AdvancedCard(prefs: Prefs) {
             subtitle = "已经是 Live Update 的通知不再重复转换",
             checked = prefs.skipAlreadyPromoted,
             onCheckedChange = { prefs.skipAlreadyPromoted = it },
+        )
+        SettingSwitch(
+            title = "应用在前台时隐藏",
+            subtitle = "打开源应用时收起实时更新，退出后自动恢复（需要「使用情况访问」权限）",
+            checked = prefs.hideWhenSourceForeground,
+            onCheckedChange = { prefs.hideWhenSourceForeground = it },
+        )
+        SettingSwitch(
+            title = "完成后自动清除",
+            subtitle = "进度到 100% 或文字显示已完成，8 秒后自动移除通知",
+            checked = prefs.autoClearOnComplete,
+            onCheckedChange = { prefs.autoClearOnComplete = it },
         )
     }
 }

@@ -73,6 +73,16 @@ class Prefs private constructor(context: Context) {
         write = { putBoolean(KEY_REPLACE_SOURCE, it) },
     )
 
+    var hideWhenSourceForeground: Boolean by cachedPref(
+        read = { sp.getBoolean(KEY_HIDE_FOREGROUND, true) },
+        write = { putBoolean(KEY_HIDE_FOREGROUND, it) },
+    )
+
+    var autoClearOnComplete: Boolean by cachedPref(
+        read = { sp.getBoolean(KEY_AUTO_CLEAR, true) },
+        write = { putBoolean(KEY_AUTO_CLEAR, it) },
+    )
+
     fun isPackageEnabled(packageName: String): Boolean =
         allApps || allowedPackages.contains(packageName)
 
@@ -140,6 +150,8 @@ class Prefs private constructor(context: Context) {
         private const val KEY_SKIP_PROMOTED = "skip_already_promoted"
         private const val KEY_CHIP_STYLE = "chip_style"
         private const val KEY_REPLACE_SOURCE = "replace_source"
+        private const val KEY_HIDE_FOREGROUND = "hide_source_foreground"
+        private const val KEY_AUTO_CLEAR = "auto_clear_complete"
         private const val KEY_IGNORED = "ignored_sources"
 
         @Volatile

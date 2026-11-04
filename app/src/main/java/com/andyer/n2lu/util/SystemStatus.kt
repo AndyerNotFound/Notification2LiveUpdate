@@ -14,6 +14,7 @@ import com.andyer.n2lu.service.PromotionSupport
 data class StatusSnapshot(
     val notificationAccess: Boolean,
     val notificationsEnabled: Boolean,
+    val usageAccess: Boolean,
     val promotionSupported: Boolean,
     val promotionAllowed: Boolean,
     val promotionOptIn: Boolean,
@@ -48,6 +49,7 @@ object SystemStatus {
         return StatusSnapshot(
             notificationAccess = hasNotificationAccess(application),
             notificationsEnabled = NotificationManagerCompat.from(application).areNotificationsEnabled(),
+            usageAccess = ForegroundApps.hasAccess(application),
             promotionSupported = Build.VERSION.SDK_INT >= 36,
             promotionAllowed = canPromote(application),
             promotionOptIn = PromotionSupport.mode(application) == PromotionSupport.Mode.OPT_IN,
@@ -130,6 +132,11 @@ object SystemStatus {
 
     fun openAppNotificationSettings(context: Context): Boolean =
         startFirst(context, listOf(appNotificationIntent(context)))
+
+    fun openUsageAccessSettings(context: Context): Boolean = startFirst(
+        context,
+        listOf(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)),
+    )
 
     fun openAppDetails(context: Context): Boolean = startFirst(
         context,

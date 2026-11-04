@@ -14,6 +14,7 @@ import androidx.annotation.RequiresApi
 import com.andyer.n2lu.R
 import com.andyer.n2lu.data.Prefs
 import androidx.core.app.NotificationManagerCompat
+import com.andyer.n2lu.util.ForegroundApps
 import com.andyer.n2lu.util.IconLoader
 import com.andyer.n2lu.util.SystemStatus
 
@@ -29,10 +30,12 @@ object Reposter {
     private const val TAG_PREFIX = "n2lu:"
     private const val MIN_INTERVAL_MS = 200L
     private const val MAX_TRACKED = 128
+    private const val STALE_GRACE_MS = 5_000L
     private const val ACCENT = 0xFF14B8A6.toInt()
 
     private val signatures = HashMap<String, String>()
     private val lastPostAt = HashMap<String, Long>()
+    private val records = HashMap<String, Record>()
     private val lock = Any()
 
     fun ensureChannel(context: Context) {
@@ -82,10 +85,13 @@ object Reposter {
             val built = build(context, info, prefs, chip)
             val manager = context.getSystemService(NotificationManager::class.java)
                 ?: return PostResult.Failed("无 NotificationManager")
-            manager.notify(tagOf(info.key), idOf(info.key), built.notification)
+            val hidden = shouldHideForForeground(context, info, prefs)
+            if (!hidden) manager.notify(tagOf(info.key), idOf(info.key), built.notification)
             synchronized(lock) {
                 signatures[info.key] = signature
                 lastPostAt[info.key] = SystemClock.elapsedRealtime()
+                if (records.size > MAX_TRACKED) records.clear()
+                records[info.key] = Record(info.packageName, built.notification, hidden, SystemClock.elapsedRealtime())
             }
             PostResult.Posted(built.promotable, chip)
         } catch (t: Throwable) {
@@ -99,7 +105,58 @@ object Reposter {
         synchronized(lock) {
             signatures.remove(key)
             lastPostAt.remove(key)
+            records.remove(key)
         }
+    }
+
+    fun hasRecords(): Boolean = synchronized(lock) { records.isNotEmpty() }
+
+    fun applyForeground(context: Context, foreground: String?) {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        val activeTags = runCatching {
+            manager.activeNotifications.mapNotNull { it.tag }.toSet()
+        }.getOrNull()
+        val toHide = ArrayList<String>()
+        val toShow = ArrayList<Pair<String, Notification>>()
+        val now = SystemClock.elapsedRealtime()
+        synchronized(lock) {
+            val changes = ArrayList<Pair<String, Record>>()
+            val iterator = records.entries.iterator()
+            while (iterator.hasNext()) {
+                val entry = iterator.next()
+                val key = entry.key
+                val record = entry.value
+                if (record.sourcePackage == context.packageName) continue
+                val stale = !record.hidden && activeTags != null &&
+                    now - record.postedAt > STALE_GRACE_MS && tagOf(key) !in activeTags
+                if (stale) {
+                    iterator.remove()
+                    signatures.remove(key)
+                    lastPostAt.remove(key)
+                    continue
+                }
+                val hide = foreground != null && record.sourcePackage == foreground
+                if (hide == record.hidden) continue
+                changes += key to record.copy(hidden = hide)
+                if (hide) toHide += key else toShow += key to record.notification
+            }
+            for ((key, record) in changes) {
+                records[key] = record
+            }
+        }
+        for (key in toHide) {
+            runCatching { manager.cancel(tagOf(key), idOf(key)) }
+        }
+        for ((key, notification) in toShow) {
+            runCatching { manager.notify(tagOf(key), idOf(key), notification) }
+        }
+    }
+
+    private fun shouldHideForForeground(context: Context, info: SourceInfo, prefs: Prefs): Boolean {
+        if (!prefs.hideWhenSourceForeground) return false
+        if (info.packageName == context.packageName) return false
+        if (!ForegroundApps.hasAccess(context)) return false
+        return ForegroundApps.currentPackage(context) == info.packageName
     }
 
     fun isPromoted(context: Context, key: String): Boolean? {
@@ -120,10 +177,18 @@ object Reposter {
         synchronized(lock) {
             signatures.clear()
             lastPostAt.clear()
+            records.clear()
         }
     }
 
     private class Built(val notification: Notification, val promotable: Boolean)
+
+    private data class Record(
+        val sourcePackage: String,
+        val notification: Notification,
+        val hidden: Boolean,
+        val postedAt: Long,
+    )
 
     private fun build(context: Context, info: SourceInfo, prefs: Prefs, chip: String): Built {
         val title = info.title.ifBlank { info.appLabel }

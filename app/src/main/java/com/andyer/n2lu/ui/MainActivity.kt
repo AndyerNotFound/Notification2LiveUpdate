@@ -132,6 +132,15 @@ private fun AppRoot() {
                     }
                 }
             },
+            onOpenUsageAccess = {
+                if (!SystemStatus.openUsageAccessSettings(context)) {
+                    Toast.makeText(
+                        context,
+                        "打不开「使用情况访问」设置页，请在系统设置的「特殊应用权限」里手动查找本应用。",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            },
             onOpenApps = { screen = Screen.Apps },
         )
 
