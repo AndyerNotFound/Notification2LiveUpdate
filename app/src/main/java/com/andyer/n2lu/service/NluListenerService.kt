@@ -155,35 +155,36 @@ class NluListenerService : NotificationListenerService() {
 
     private fun trackViewed(foreground: String?) {
         val settings = prefs
-        if (!settings.dismissAfterViewed || foreground == null) {
-            viewedSince.clear()
-            return
-        }
-        val candidates = Reposter.dismissableInForeground(foreground)
+        if (!settings.dismissAfterViewed || foreground == null) return
+        val candidates = Reposter.dismissableInForeground(foreground, packageName)
         val dismissed = HashSet<String>()
         val now = SystemClock.elapsedRealtime()
         val iterator = viewedSince.entries.iterator()
         while (iterator.hasNext()) {
             val entry = iterator.next()
-            val info = candidates.firstOrNull { it.key == entry.key }
-            if (info == null) {
+            val candidate = candidates.firstOrNull { it.info.key == entry.key }
+            if (candidate == null) {
                 iterator.remove()
                 continue
             }
-            if (now - entry.value < VIEW_DWELL_MS) continue
+            val since = maxOf(entry.value, candidate.postedAt)
+            if (now - since < VIEW_DWELL_MS) continue
             iterator.remove()
-            dismissed += info.key
-            cancelAutoClear(info.key)
-            Reposter.removeCompleted(this, info.key)
-            log(
-                packageName = info.packageName,
-                appLabel = info.appLabel,
-                title = info.title.ifBlank { info.text },
-                state = "已查看 · 自动关闭",
-            )
+            dismissed += candidate.info.key
+            cancelAutoClear(candidate.info.key)
+            if (Reposter.removeCompleted(this, candidate.info.key)) {
+                log(
+                    packageName = candidate.info.packageName,
+                    appLabel = candidate.info.appLabel,
+                    title = candidate.info.title.ifBlank { candidate.info.text },
+                    state = "已查看 · 自动关闭",
+                )
+            }
         }
-        for (info in candidates) {
-            if (info.key !in dismissed) viewedSince.putIfAbsent(info.key, now)
+        for (candidate in candidates) {
+            if (candidate.info.key !in dismissed) {
+                viewedSince.putIfAbsent(candidate.info.key, now)
+            }
         }
     }
 
@@ -191,10 +192,9 @@ class NluListenerService : NotificationListenerService() {
         if (autoClearJobs[info.key]?.isActive == true) return
         autoClearJobs[info.key] = scope.launch {
             delay(AUTO_CLEAR_DELAY_MS)
-            val existed = Reposter.hasRecord(info.key)
-            Reposter.removeCompleted(this@NluListenerService, info.key)
+            val removed = Reposter.removeCompleted(this@NluListenerService, info.key)
             autoClearJobs.remove(info.key)
-            if (!existed) return@launch
+            if (!removed) return@launch
             log(
                 packageName = info.packageName,
                 appLabel = info.appLabel,
@@ -234,6 +234,6 @@ class NluListenerService : NotificationListenerService() {
         private const val AUTO_CLEAR_DELAY_MS = 8_000L
         private const val VIEW_DWELL_MS = 6_000L
         private const val ACTIVE_POLL_MS = 1_500L
-        private const val IDLE_POLL_MS = 10_000L
+        private const val IDLE_POLL_MS = 2_000L
     }
 }

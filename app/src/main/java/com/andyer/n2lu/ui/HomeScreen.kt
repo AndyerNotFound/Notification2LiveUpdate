@@ -113,7 +113,7 @@ fun HomeScreen(
         )
         SystemCard(
             status = status,
-            hideInForeground = prefs.hideWhenSourceForeground,
+            needsUsageAccess = prefs.hideWhenSourceForeground || prefs.dismissAfterViewed,
             onOpenAccess = onOpenAccess,
             onOpenPromotion = onOpenPromotion,
             onRequestNotifications = onRequestNotifications,
@@ -292,7 +292,7 @@ private fun LivePreview() {
 @Composable
 private fun SystemCard(
     status: StatusSnapshot,
-    hideInForeground: Boolean,
+    needsUsageAccess: Boolean,
     onOpenAccess: () -> Unit,
     onOpenPromotion: () -> Unit,
     onRequestNotifications: () -> Unit,
@@ -346,13 +346,13 @@ private fun SystemCard(
                 ok = false,
             )
         }
-        if (hideInForeground) {
+        if (needsUsageAccess) {
             StatusRow(
                 title = "使用情况访问",
                 subtitle = if (status.usageAccess) {
-                    "已授权，源应用回到前台时会收起实时更新"
+                    "已授权，前台隐藏 / 查看后关闭可以生效"
                 } else {
-                    "未授权，无法判断前台应用；点击前往系统设置授予"
+                    "未授权，前台相关功能不会生效；点击前往系统设置授予"
                 },
                 ok = status.usageAccess,
                 actionText = if (status.usageAccess) null else "去授权",

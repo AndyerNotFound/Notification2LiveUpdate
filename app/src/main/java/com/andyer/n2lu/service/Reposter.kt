@@ -31,12 +31,13 @@ object Reposter {
     private const val MIN_INTERVAL_MS = 200L
     private const val MAX_TRACKED = 128
     private const val STALE_GRACE_MS = 5_000L
+    private const val CLEAR_TTL_MS = 60_000L
     private const val ACCENT = 0xFF14B8A6.toInt()
 
     private val signatures = HashMap<String, String>()
     private val lastPostAt = HashMap<String, Long>()
     private val records = HashMap<String, Record>()
-    private val clearedSignatures = HashMap<String, String>()
+    private val clearedSignatures = HashMap<String, Pair<String, Long>>()
     private val lock = Any()
 
     fun ensureChannel(context: Context) {
@@ -73,8 +74,12 @@ object Reposter {
             append(prefs.keepAfterSourceGone)
         }
         synchronized(lock) {
-            if (clearedSignatures[info.key] == signature) return PostResult.Skipped
-            clearedSignatures.remove(info.key)
+            val cleared = clearedSignatures[info.key]
+            if (cleared != null) {
+                val fresh = SystemClock.elapsedRealtime() - cleared.second < CLEAR_TTL_MS
+                if (fresh && cleared.first == signature) return PostResult.Skipped
+                clearedSignatures.remove(info.key)
+            }
             val last = lastPostAt[info.key] ?: 0L
             if (signatures[info.key] == signature && SystemClock.elapsedRealtime() - last < MIN_INTERVAL_MS) {
                 return PostResult.Skipped
@@ -113,19 +118,21 @@ object Reposter {
         }
     }
 
-    fun removeCompleted(context: Context, key: String) {
+    fun removeCompleted(context: Context, key: String): Boolean {
         val signature = synchronized(lock) { signatures[key] }
-        synchronized(lock) {
-            if (signature != null) clearedSignatures[key] = signature
+        val existed = synchronized(lock) {
+            val removed = records.remove(key) != null
+            if (signature != null) {
+                clearedSignatures[key] = signature to SystemClock.elapsedRealtime()
+            }
             signatures.remove(key)
             lastPostAt.remove(key)
-            records.remove(key)
+            removed
         }
-        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return existed
         runCatching { manager.cancel(tagOf(key), idOf(key)) }
+        return existed
     }
-
-    fun hasRecord(key: String): Boolean = synchronized(lock) { records.containsKey(key) }
 
     fun hasRecords(): Boolean = synchronized(lock) { records.isNotEmpty() }
 
@@ -203,23 +210,19 @@ object Reposter {
 
     private class Built(val notification: Notification, val promotable: Boolean)
 
-    fun dismissableInForeground(foreground: String?): List<SourceInfo> {
+    data class ViewCandidate(val info: SourceInfo, val postedAt: Long)
+
+    fun dismissableInForeground(foreground: String?, ownPackage: String): List<ViewCandidate> {
         if (foreground == null) return emptyList()
         return synchronized(lock) {
             records.values
-                .map { it.info }
-                .filter { it.packageName == foreground && it.isMessageLike() }
+                .filter {
+                    it.info.packageName == foreground &&
+                        it.info.packageName != ownPackage &&
+                        ViewAckPolicy.isMessageLike(it.info.category, it.info.isOngoing, it.info.hasProgress)
+                }
+                .map { ViewCandidate(it.info, it.postedAt) }
         }
-    }
-
-    private fun SourceInfo.isMessageLike(): Boolean {
-        if (category == Notification.CATEGORY_MESSAGE ||
-            category == Notification.CATEGORY_EMAIL ||
-            category == Notification.CATEGORY_SOCIAL
-        ) {
-            return true
-        }
-        return !isOngoing && !hasProgress
     }
 
     private data class Record(
