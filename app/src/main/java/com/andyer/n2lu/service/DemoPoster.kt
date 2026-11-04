@@ -8,6 +8,7 @@ import com.andyer.n2lu.data.Prefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -15,12 +16,14 @@ object DemoPoster {
 
     private const val DEMO_KEY = "n2lu|demo"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var job: Job? = null
 
     fun start(context: Context): PostResult {
         val appContext = context.applicationContext
         val settings = Prefs.get(appContext)
         val first = Reposter.post(appContext, demoInfo(appContext, 0), settings)
-        scope.launch {
+        job?.cancel()
+        job = scope.launch {
             for (step in 1..20) {
                 delay(600)
                 Reposter.post(appContext, demoInfo(appContext, step), settings)
@@ -32,6 +35,8 @@ object DemoPoster {
     }
 
     fun stop(context: Context) {
+        job?.cancel()
+        job = null
         Reposter.removeSource(context.applicationContext, DEMO_KEY)
     }
 

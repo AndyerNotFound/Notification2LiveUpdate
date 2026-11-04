@@ -45,7 +45,7 @@ class NluListenerService : NotificationListenerService() {
         val ranking = NotificationListenerService.Ranking()
         val hasRanking = runCatching { rankingMap.getRanking(sbn.key, ranking) }.getOrDefault(false)
         val channel = if (hasRanking) ranking.channel else null
-        val importance = channel?.importance ?: NotificationManager.IMPORTANCE_DEFAULT
+        val importance = if (hasRanking) ranking.importance else NotificationManager.IMPORTANCE_DEFAULT
         val info = SourceParser.parse(this, sbn, importance, channel?.id) ?: return
 
         if (settings.isSourceIgnored(info.key)) return

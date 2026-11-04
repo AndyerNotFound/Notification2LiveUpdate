@@ -12,7 +12,9 @@ import android.os.SystemClock
 import androidx.annotation.RequiresApi
 import com.andyer.n2lu.R
 import com.andyer.n2lu.data.Prefs
+import androidx.core.app.NotificationManagerCompat
 import com.andyer.n2lu.util.IconLoader
+import com.andyer.n2lu.util.SystemStatus
 
 sealed interface PostResult {
     data class Posted(val promotable: Boolean, val chip: String) : PostResult
@@ -25,6 +27,7 @@ object Reposter {
     const val CHANNEL_ID = "n2lu_live_updates"
     private const val TAG_PREFIX = "n2lu:"
     private const val MIN_INTERVAL_MS = 200L
+    private const val MAX_TRACKED = 128
     private const val ACCENT = 0xFF14B8A6.toInt()
 
     private val signatures = HashMap<String, String>()
@@ -50,6 +53,9 @@ object Reposter {
 
     fun post(context: Context, info: SourceInfo, prefs: Prefs): PostResult {
         ensureChannel(context)
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            return PostResult.Failed("通知权限未开启")
+        }
         val chip = ChipText.build(info, prefs.chipStyle)
         val signature = buildString {
             append(info.title).append('|')
@@ -66,10 +72,15 @@ object Reposter {
             if (signatures[info.key] == signature && SystemClock.elapsedRealtime() - last < MIN_INTERVAL_MS) {
                 return PostResult.Skipped
             }
+            if (signatures.size > MAX_TRACKED) {
+                signatures.clear()
+                lastPostAt.clear()
+            }
         }
         return try {
             val built = build(context, info, prefs, chip)
             val manager = context.getSystemService(NotificationManager::class.java)
+                ?: return PostResult.Failed("无 NotificationManager")
             manager.notify(tagOf(info.key), idOf(info.key), built.notification)
             synchronized(lock) {
                 signatures[info.key] = signature
@@ -129,7 +140,8 @@ object Reposter {
                 .setWhen(if (info.whenMillis > 0L) info.whenMillis else System.currentTimeMillis())
                 .setShowWhen(true)
         } else {
-            builder.setShowWhen(false)
+            builder.setShowWhen(info.showWhen)
+                .setWhen(if (info.whenMillis > 0L) info.whenMillis else System.currentTimeMillis())
         }
 
         IconLoader.appIcon(context, info.packageName)?.let { builder.setLargeIcon(it) }
@@ -174,11 +186,9 @@ object Reposter {
         }
 
         val notification = builder.build()
-        val promotable = if (Build.VERSION.SDK_INT >= 36) {
+        val promotable = Build.VERSION.SDK_INT >= 36 &&
+            SystemStatus.canPromote(context) &&
             runCatching { notification.hasPromotableCharacteristics() }.getOrDefault(false)
-        } else {
-            false
-        }
         return Built(notification, promotable)
     }
 

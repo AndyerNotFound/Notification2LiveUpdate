@@ -104,7 +104,7 @@ class Prefs private constructor(context: Context) {
         }
     }
 
-    private inline fun edit(block: android.content.SharedPreferences.Editor.() -> Unit) {
+    private fun edit(block: android.content.SharedPreferences.Editor.() -> Unit) {
         val editor = sp.edit()
         editor.block()
         editor.apply()

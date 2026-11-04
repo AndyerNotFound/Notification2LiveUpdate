@@ -22,7 +22,6 @@ import com.andyer.n2lu.data.Prefs
 import com.andyer.n2lu.service.DemoPoster
 import com.andyer.n2lu.service.Reposter
 import com.andyer.n2lu.ui.theme.N2LuTheme
-import com.andyer.n2lu.util.StatusSnapshot
 import com.andyer.n2lu.util.SystemStatus
 import kotlinx.coroutines.delay
 
@@ -51,18 +50,22 @@ private fun AppRoot() {
     var status by remember { mutableStateOf(SystemStatus.snapshot(context)) }
     val events by EventLog.events.collectAsState()
 
-    LaunchedEffect(Unit) {
-        EventLog.load(context)
-        while (true) {
-            status = SystemStatus.snapshot(context)
-            delay(1500)
-        }
-    }
-
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) {
         status = SystemStatus.snapshot(context)
+    }
+
+    LaunchedEffect(Unit) {
+        EventLog.load(context)
+        status = SystemStatus.snapshot(context)
+        if (Build.VERSION.SDK_INT >= 33 && !status.notificationsEnabled) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        while (true) {
+            status = SystemStatus.snapshot(context)
+            delay(2000)
+        }
     }
 
     BackHandler(enabled = screen != Screen.Home) { screen = Screen.Home }
