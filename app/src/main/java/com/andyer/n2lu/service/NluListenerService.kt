@@ -55,9 +55,11 @@ class NluListenerService : NotificationListenerService() {
         if (sourcePackage == packageName) return
         if (!settings.isPackageEnabled(sourcePackage)) return
 
-        val ranking = runCatching { rankingMap.getRanking(sbn.key) }.getOrNull()
-        val importance = ranking?.channel?.importance ?: NotificationManager.IMPORTANCE_DEFAULT
-        val info = SourceParser.parse(this, sbn, importance, ranking?.channel?.id) ?: return
+        val ranking = NotificationListenerService.Ranking()
+        val hasRanking = runCatching { rankingMap.getRanking(sbn.key, ranking) }.getOrDefault(false)
+        val channel = if (hasRanking) ranking.channel else null
+        val importance = channel?.importance ?: NotificationManager.IMPORTANCE_DEFAULT
+        val info = SourceParser.parse(this, sbn, importance, channel?.id) ?: return
 
         if (settings.isSourceIgnored(info.key)) return
         if (settings.skipAlreadyPromoted && info.isPromoted) return
