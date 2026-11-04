@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Notification 2 Live Update</string>
+    <string name="service_label">N2LU 通知转换服务</string>
+    <string name="channel_live_name">实时更新</string>
+    <string name="channel_live_desc">由横幅通知转换而来的常驻进度通知</string>
+</resources>
