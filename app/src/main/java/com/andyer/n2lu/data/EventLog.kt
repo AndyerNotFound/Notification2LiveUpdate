@@ -58,7 +58,19 @@ object EventLog {
 
     fun add(context: Context, event: LogEvent) {
         synchronized(lock) {
-            val next = (listOf(event) + _events.value).take(MAX_EVENTS)
+            val current = _events.value
+            val head = current.firstOrNull()
+            val merged = if (
+                head != null &&
+                head.packageName == event.packageName &&
+                head.title == event.title &&
+                kotlin.math.abs(event.time - head.time) < 120_000L
+            ) {
+                listOf(event) + current.drop(1)
+            } else {
+                listOf(event) + current
+            }
+            val next = merged.take(MAX_EVENTS)
             _events.value = next
             persist(context, next)
         }

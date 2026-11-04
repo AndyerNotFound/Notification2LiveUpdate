@@ -63,6 +63,10 @@ class Prefs private constructor(context: Context) {
         get() = enumOf(sp.getString(KEY_CHIP_STYLE, null), ChipStyle.AUTO)
         set(value) = edit { putString(KEY_CHIP_STYLE, value.name) }
 
+    var replaceSource: Boolean
+        get() = sp.getBoolean(KEY_REPLACE_SOURCE, false)
+        set(value) = edit { putBoolean(KEY_REPLACE_SOURCE, value) }
+
     fun isPackageEnabled(packageName: String): Boolean =
         allApps || allowedPackages.contains(packageName)
 
@@ -116,6 +120,7 @@ class Prefs private constructor(context: Context) {
         private const val KEY_KEEP_AFTER_GONE = "keep_after_source_gone"
         private const val KEY_SKIP_PROMOTED = "skip_already_promoted"
         private const val KEY_CHIP_STYLE = "chip_style"
+        private const val KEY_REPLACE_SOURCE = "replace_source"
         private const val KEY_IGNORED = "ignored_sources"
 
         @Volatile

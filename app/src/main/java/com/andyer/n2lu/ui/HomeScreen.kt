@@ -389,6 +389,12 @@ private fun AdvancedCard(prefs: Prefs) {
             onCheckedChange = { prefs.keepAfterSourceGone = it },
         )
         SettingSwitch(
+            title = "替换原始通知",
+            subtitle = "转换成功后移除原应用的通知，可能丢失其操作按钮",
+            checked = prefs.replaceSource,
+            onCheckedChange = { prefs.replaceSource = it },
+        )
+        SettingSwitch(
             title = "跳过已有的实时更新",
             subtitle = "已经是 Live Update 的通知不再重复转换",
             checked = prefs.skipAlreadyPromoted,
