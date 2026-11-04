@@ -1,8 +1,10 @@
 package com.andyer.n2lu.data
 
 import android.content.Context
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import android.content.SharedPreferences
+import androidx.compose.runtime.mutableStateOf
+import kotlin.properties.ReadWriteProperty
+import kotlin.reflect.KProperty
 
 enum class TriggerMode {
     BANNER,
@@ -17,55 +19,59 @@ enum class ChipStyle {
     TITLE,
 }
 
-object PrefsBus {
-    private val _revision = MutableStateFlow(0L)
-    val revision: StateFlow<Long> = _revision
-
-    fun bump() {
-        _revision.value = _revision.value + 1
-    }
-}
-
+/**
+ * Values live in Compose snapshot state and are mirrored to SharedPreferences, so a write made in
+ * any screen recomposes every reader instead of only bumping a revision counter.
+ */
 class Prefs private constructor(context: Context) {
 
-    private val sp = context.applicationContext
+    private val sp: SharedPreferences = context.applicationContext
         .getSharedPreferences("n2lu_settings", Context.MODE_PRIVATE)
 
-    var enabled: Boolean
-        get() = sp.getBoolean(KEY_ENABLED, false)
-        set(value) = edit { putBoolean(KEY_ENABLED, value) }
+    var enabled: Boolean by cachedPref(
+        read = { sp.getBoolean(KEY_ENABLED, false) },
+        write = { putBoolean(KEY_ENABLED, it) },
+    )
 
-    var triggerMode: TriggerMode
-        get() = enumOf(sp.getString(KEY_TRIGGER, null), TriggerMode.BANNER_OR_PROGRESS)
-        set(value) = edit { putString(KEY_TRIGGER, value.name) }
+    var triggerMode: TriggerMode by cachedPref(
+        read = { enumOf(sp.getString(KEY_TRIGGER, null), TriggerMode.BANNER_OR_PROGRESS) },
+        write = { putString(KEY_TRIGGER, it.name) },
+    )
 
-    var allApps: Boolean
-        get() = sp.getBoolean(KEY_ALL_APPS, false)
-        set(value) = edit { putBoolean(KEY_ALL_APPS, value) }
+    var allApps: Boolean by cachedPref(
+        read = { sp.getBoolean(KEY_ALL_APPS, false) },
+        write = { putBoolean(KEY_ALL_APPS, it) },
+    )
 
-    var allowedPackages: Set<String>
-        get() = sp.getStringSet(KEY_ALLOWED, null)?.toSet() ?: emptySet()
-        set(value) = edit { putStringSet(KEY_ALLOWED, value.toMutableSet()) }
+    var allowedPackages: Set<String> by cachedPref(
+        read = { sp.getStringSet(KEY_ALLOWED, null)?.toSet() ?: emptySet() },
+        write = { putStringSet(KEY_ALLOWED, LinkedHashSet(it)) },
+    )
 
-    var showSourceApp: Boolean
-        get() = sp.getBoolean(KEY_SHOW_SOURCE, true)
-        set(value) = edit { putBoolean(KEY_SHOW_SOURCE, value) }
+    var showSourceApp: Boolean by cachedPref(
+        read = { sp.getBoolean(KEY_SHOW_SOURCE, true) },
+        write = { putBoolean(KEY_SHOW_SOURCE, it) },
+    )
 
-    var keepAfterSourceGone: Boolean
-        get() = sp.getBoolean(KEY_KEEP_AFTER_GONE, false)
-        set(value) = edit { putBoolean(KEY_KEEP_AFTER_GONE, value) }
+    var keepAfterSourceGone: Boolean by cachedPref(
+        read = { sp.getBoolean(KEY_KEEP_AFTER_GONE, false) },
+        write = { putBoolean(KEY_KEEP_AFTER_GONE, it) },
+    )
 
-    var skipAlreadyPromoted: Boolean
-        get() = sp.getBoolean(KEY_SKIP_PROMOTED, true)
-        set(value) = edit { putBoolean(KEY_SKIP_PROMOTED, value) }
+    var skipAlreadyPromoted: Boolean by cachedPref(
+        read = { sp.getBoolean(KEY_SKIP_PROMOTED, true) },
+        write = { putBoolean(KEY_SKIP_PROMOTED, it) },
+    )
 
-    var chipStyle: ChipStyle
-        get() = enumOf(sp.getString(KEY_CHIP_STYLE, null), ChipStyle.AUTO)
-        set(value) = edit { putString(KEY_CHIP_STYLE, value.name) }
+    var chipStyle: ChipStyle by cachedPref(
+        read = { enumOf(sp.getString(KEY_CHIP_STYLE, null), ChipStyle.AUTO) },
+        write = { putString(KEY_CHIP_STYLE, it.name) },
+    )
 
-    var replaceSource: Boolean
-        get() = sp.getBoolean(KEY_REPLACE_SOURCE, false)
-        set(value) = edit { putBoolean(KEY_REPLACE_SOURCE, value) }
+    var replaceSource: Boolean by cachedPref(
+        read = { sp.getBoolean(KEY_REPLACE_SOURCE, false) },
+        write = { putBoolean(KEY_REPLACE_SOURCE, it) },
+    )
 
     fun isPackageEnabled(packageName: String): Boolean =
         allApps || allowedPackages.contains(packageName)
@@ -87,9 +93,11 @@ class Prefs private constructor(context: Context) {
     fun ignoreSource(key: String, minutes: Long = 30L) {
         val expiry = System.currentTimeMillis() + minutes * 60_000L
         val next = sp.getStringSet(KEY_IGNORED, null)?.toMutableSet() ?: mutableSetOf()
-        next.removeAll { item -> item.substringAfterLast('|').toLongOrNull()?.let { it < System.currentTimeMillis() } ?: true }
+        next.removeAll { item ->
+            item.substringAfterLast('|').toLongOrNull()?.let { it < System.currentTimeMillis() } ?: true
+        }
         next.add("$key|$expiry")
-        edit { putStringSet(KEY_IGNORED, next) }
+        sp.edit().putStringSet(KEY_IGNORED, next).apply()
     }
 
     fun isSourceIgnored(key: String): Boolean {
@@ -104,11 +112,22 @@ class Prefs private constructor(context: Context) {
         }
     }
 
-    private fun edit(block: android.content.SharedPreferences.Editor.() -> Unit) {
-        val editor = sp.edit()
-        editor.block()
-        editor.apply()
-        PrefsBus.bump()
+    private fun <T> cachedPref(
+        read: () -> T,
+        write: SharedPreferences.Editor.(T) -> Unit,
+    ): ReadWriteProperty<Any?, T> {
+        val state = mutableStateOf(read())
+        return object : ReadWriteProperty<Any?, T> {
+            override fun getValue(thisRef: Any?, property: KProperty<*>): T = state.value
+
+            override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
+                if (state.value == value) return
+                state.value = value
+                val editor = sp.edit()
+                editor.write(value)
+                editor.apply()
+            }
+        }
     }
 
     companion object {

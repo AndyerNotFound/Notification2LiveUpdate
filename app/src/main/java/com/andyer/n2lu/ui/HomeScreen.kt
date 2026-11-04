@@ -38,7 +38,6 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,7 +57,6 @@ import com.andyer.n2lu.data.ChipStyle
 import com.andyer.n2lu.data.EventLog
 import com.andyer.n2lu.data.LogEvent
 import com.andyer.n2lu.data.Prefs
-import com.andyer.n2lu.data.PrefsBus
 import com.andyer.n2lu.data.TriggerMode
 import com.andyer.n2lu.service.DemoPoster
 import com.andyer.n2lu.service.PostResult
@@ -87,9 +85,8 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val revision by PrefsBus.revision.collectAsState()
     var testMessage by remember { mutableStateOf<String?>(null) }
-    val selectedCount = remember(revision) { prefs.allowedPackages.size }
+    val selectedCount = prefs.allowedPackages.size
     val versionName = remember {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName

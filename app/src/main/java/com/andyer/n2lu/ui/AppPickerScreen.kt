@@ -32,7 +32,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -45,7 +44,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.andyer.n2lu.data.Prefs
-import com.andyer.n2lu.data.PrefsBus
 import com.andyer.n2lu.util.AppEntry
 import com.andyer.n2lu.util.AppRepository
 import kotlinx.coroutines.Dispatchers
@@ -55,7 +53,6 @@ import kotlinx.coroutines.withContext
 @Composable
 fun AppPickerScreen(prefs: Prefs, onBack: () -> Unit) {
     val context = LocalContext.current
-    val revision by PrefsBus.revision.collectAsState()
     var query by remember { mutableStateOf("") }
 
     val apps by produceState<List<AppEntry>?>(initialValue = null) {
@@ -64,7 +61,7 @@ fun AppPickerScreen(prefs: Prefs, onBack: () -> Unit) {
         }
     }
 
-    val filtered = remember(apps, query, revision) {
+    val filtered = remember(apps, query) {
         val all = apps ?: emptyList()
         if (query.isBlank()) {
             all

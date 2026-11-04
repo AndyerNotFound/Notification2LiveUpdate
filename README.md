@@ -147,7 +147,7 @@ export ANDROID_KEY_PASSWORD=...
 app/src/main/java/com/andyer/n2lu/
 ├── N2LuApp.kt                 应用入口：日志、通知渠道
 ├── data/
-│   ├── Prefs.kt               设置存储 + 变更通知
+│   ├── Prefs.kt               设置存储（Compose 状态 + SharedPreferences）
 │   └── EventLog.kt            最近转换记录（JSON 持久化）
 ├── service/
 │   ├── NluListenerService.kt  通知监听与调度
@@ -171,7 +171,10 @@ app/src/main/java/com/andyer/n2lu/
 
 ## 常见问题
 
-**Q：某些按钮点了没反应？**
+**Q：选项卡/开关点了没反应，或者一松手就弹回原样？**
+A：0.4.1 修掉了这个界面问题。此前设置值虽然已经写进 `SharedPreferences`（转换逻辑确实生效），但界面读的是普通字段，Compose 认为参数没变就跳过了重组，于是按钮有涟漪、显示却不更新。现在设置值本身就是 Compose 快照状态，任何界面改动都会立即反映到所有读取它的地方。
+
+**Q：某些跳转按钮点了没反应？**
 A：0.3.0 起所有跳转失败都会弹 Toast 说明原因；系统确实没有对应设置页时，会退回到应用通知设置/应用信息页。如果连 Toast 都没有，请把「诊断信息」卡片截图反馈。
 
 **Q：系统设置里找不到本应用的「实时更新」开关？**
