@@ -23,6 +23,7 @@ import com.andyer.n2lu.data.Prefs
 import com.andyer.n2lu.service.DemoPoster
 import com.andyer.n2lu.service.Reposter
 import com.andyer.n2lu.ui.theme.N2LuTheme
+import com.andyer.n2lu.util.PromotionPage
 import com.andyer.n2lu.util.SystemStatus
 import kotlinx.coroutines.delay
 
@@ -106,12 +107,20 @@ private fun AppRoot() {
                         "当前安装包没有声明 POST_PROMOTED_NOTIFICATIONS，请确认版本是 0.3.0 及以上。",
                         Toast.LENGTH_LONG,
                     ).show()
-                } else if (!SystemStatus.openPromotionSettings(context)) {
-                    Toast.makeText(
-                        context,
-                        "此系统没有「实时更新」设置页（需要 Android 16 QPR1），提升由系统自动判定。",
-                        Toast.LENGTH_LONG,
-                    ).show()
+                } else {
+                    when (SystemStatus.openPromotionSettings(context)) {
+                        PromotionPage.PROMOTION -> Unit
+                        PromotionPage.APP_NOTIFICATIONS -> Toast.makeText(
+                            context,
+                            "此系统没有「实时更新」设置页（需要 Android 16 QPR1），已打开应用通知设置，提升由系统自动判定。",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                        PromotionPage.NONE -> Toast.makeText(
+                            context,
+                            "打不开系统设置页，请在系统设置中手动查找本应用。",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
                 }
             },
             onRequestNotifications = {

@@ -32,6 +32,12 @@ data class StatusSnapshot(
         }
 }
 
+enum class PromotionPage {
+    PROMOTION,
+    APP_NOTIFICATIONS,
+    NONE,
+}
+
 object SystemStatus {
 
     private const val ENABLED_LISTENERS = "enabled_notification_listeners"
@@ -108,18 +114,18 @@ object SystemStatus {
         return startFirst(context, candidates)
     }
 
-    fun openPromotionSettings(context: Context): Boolean {
+    fun openPromotionSettings(context: Context): PromotionPage {
         if (Build.VERSION.SDK_INT >= 36) {
-            return startFirst(
-                context,
-                listOf(
-                    Intent(Settings.ACTION_APP_NOTIFICATION_PROMOTION_SETTINGS)
-                        .putExtra(Intent.EXTRA_PACKAGE_NAME, context.packageName),
-                    appNotificationIntent(context),
-                ),
-            )
+            val promotion = Intent(Settings.ACTION_APP_NOTIFICATION_PROMOTION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                .putExtra(Intent.EXTRA_PACKAGE_NAME, context.packageName)
+            if (startFirst(context, listOf(promotion))) return PromotionPage.PROMOTION
         }
-        return startFirst(context, listOf(appNotificationIntent(context)))
+        return if (startFirst(context, listOf(appNotificationIntent(context)))) {
+            PromotionPage.APP_NOTIFICATIONS
+        } else {
+            PromotionPage.NONE
+        }
     }
 
     fun openAppNotificationSettings(context: Context): Boolean =
