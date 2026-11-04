@@ -4,6 +4,8 @@
 
 > 一个纯本地运行的 Android 小工具：监听通知 → 解析内容 → 以本应用身份重新发布为可提升的常驻进度通知。不联网、不上传、不需要 root。
 
+**[⬇️ 下载最新 APK](https://github.com/AndyerNotFound/Notification2LiveUpdate/releases/latest)**
+
 [![Android CI](https://github.com/AndyerNotFound/Notification2LiveUpdate/actions/workflows/android.yml/badge.svg)](https://github.com/AndyerNotFound/Notification2LiveUpdate/actions/workflows/android.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 
@@ -38,6 +40,12 @@
 1. 打开仓库的 **Actions** 页面，进入最近一次成功的 `Android CI` 构建，下载 `Notification2LiveUpdate-debug` 工件。
 2. 或者从 **Releases** 下载 `Notification2LiveUpdate-*-debug.apk`。
 3. 安装 APK（需要允许「安装未知来源应用」）。
+
+每个 Release 都附带 `SHA256SUMS.txt`，下载后可先校验：
+
+```bash
+sha256sum -c SHA256SUMS.txt
+```
 
 > CI 产物使用 debug 签名，不同构建批次签名可能不同。若要长期覆盖升级，请用固定 keystore 自行构建 release 包，或配置签名 Secrets。
 
