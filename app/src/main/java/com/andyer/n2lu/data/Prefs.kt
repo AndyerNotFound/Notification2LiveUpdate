@@ -83,6 +83,11 @@ class Prefs private constructor(context: Context) {
         write = { putBoolean(KEY_AUTO_CLEAR, it) },
     )
 
+    var dismissAfterViewed: Boolean by cachedPref(
+        read = { sp.getBoolean(KEY_DISMISS_VIEWED, true) },
+        write = { putBoolean(KEY_DISMISS_VIEWED, it) },
+    )
+
     fun isPackageEnabled(packageName: String): Boolean =
         allApps || allowedPackages.contains(packageName)
 
@@ -152,6 +157,7 @@ class Prefs private constructor(context: Context) {
         private const val KEY_REPLACE_SOURCE = "replace_source"
         private const val KEY_HIDE_FOREGROUND = "hide_source_foreground"
         private const val KEY_AUTO_CLEAR = "auto_clear_complete"
+        private const val KEY_DISMISS_VIEWED = "dismiss_after_viewed"
         private const val KEY_IGNORED = "ignored_sources"
 
         @Volatile

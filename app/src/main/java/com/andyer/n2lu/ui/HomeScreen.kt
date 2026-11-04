@@ -3,6 +3,7 @@ package com.andyer.n2lu.ui
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -120,7 +121,11 @@ fun HomeScreen(
         )
         DiagnosticsCard(status = status, versionName = versionName)
         RulesCard(prefs = prefs, selectedCount = selectedCount, onOpenApps = onOpenApps)
-        AdvancedCard(prefs = prefs)
+        AdvancedCard(
+            prefs = prefs,
+            usageAccess = status.usageAccess,
+            onOpenUsageAccess = onOpenUsageAccess,
+        )
         TestCard(
             message = testMessage,
             onTest = {
@@ -492,7 +497,23 @@ private fun RulesCard(prefs: Prefs, selectedCount: Int, onOpenApps: () -> Unit) 
 }
 
 @Composable
-private fun AdvancedCard(prefs: Prefs) {
+private fun AdvancedCard(
+    prefs: Prefs,
+    usageAccess: Boolean,
+    onOpenUsageAccess: () -> Unit,
+) {
+    val context = LocalContext.current
+
+    fun requireUsageAccess() {
+        if (usageAccess) return
+        Toast.makeText(
+            context,
+            "需要先授予「使用情况访问」，否则这项功能不会生效",
+            Toast.LENGTH_LONG,
+        ).show()
+        onOpenUsageAccess()
+    }
+
     SectionCard {
         SectionTitle("高级选项")
         Spacer(Modifier.height(8.dp))
@@ -524,7 +545,19 @@ private fun AdvancedCard(prefs: Prefs) {
             title = "应用在前台时隐藏",
             subtitle = "打开源应用时收起实时更新，退出后自动恢复（需要「使用情况访问」权限）",
             checked = prefs.hideWhenSourceForeground,
-            onCheckedChange = { prefs.hideWhenSourceForeground = it },
+            onCheckedChange = {
+                prefs.hideWhenSourceForeground = it
+                if (it) requireUsageAccess()
+            },
+        )
+        SettingSwitch(
+            title = "查看后自动关闭",
+            subtitle = "在聊天类应用里停留 6 秒视为已读，直接移除；导航、下载等常驻任务不受影响",
+            checked = prefs.dismissAfterViewed,
+            onCheckedChange = {
+                prefs.dismissAfterViewed = it
+                if (it) requireUsageAccess()
+            },
         )
         SettingSwitch(
             title = "完成后自动清除",

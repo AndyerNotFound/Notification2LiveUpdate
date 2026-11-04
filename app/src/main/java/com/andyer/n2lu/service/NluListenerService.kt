@@ -26,6 +26,8 @@ class NluListenerService : NotificationListenerService() {
 
     private val autoClearJobs = ConcurrentHashMap<String, Job>()
 
+    private val viewedSince = ConcurrentHashMap<String, Long>()
+
     @Volatile
     private var foregroundJob: Job? = null
 
@@ -41,6 +43,7 @@ class NluListenerService : NotificationListenerService() {
         super.onListenerDisconnected()
         foregroundJob?.cancel()
         foregroundJob = null
+        viewedSince.clear()
         log(title = "通知监听已断开", state = "服务")
     }
 
@@ -119,6 +122,7 @@ class NluListenerService : NotificationListenerService() {
 
     override fun onDestroy() {
         autoClearJobs.clear()
+        viewedSince.clear()
         scope.cancel()
         super.onDestroy()
     }
@@ -130,15 +134,56 @@ class NluListenerService : NotificationListenerService() {
                 val active = Reposter.hasRecords()
                 if (active) {
                     val settings = prefs
-                    val foreground = if (settings.hideWhenSourceForeground) {
+                    val tracking = settings.hideWhenSourceForeground || settings.dismissAfterViewed
+                    val foreground = if (tracking) {
                         ForegroundApps.currentPackage(this@NluListenerService)
                     } else {
                         null
                     }
-                    Reposter.applyForeground(this@NluListenerService, foreground)
+                    Reposter.applyForeground(
+                        this@NluListenerService,
+                        if (settings.hideWhenSourceForeground) foreground else null,
+                    )
+                    trackViewed(foreground)
+                } else {
+                    viewedSince.clear()
                 }
                 delay(if (active) ACTIVE_POLL_MS else IDLE_POLL_MS)
             }
+        }
+    }
+
+    private fun trackViewed(foreground: String?) {
+        val settings = prefs
+        if (!settings.dismissAfterViewed || foreground == null) {
+            viewedSince.clear()
+            return
+        }
+        val candidates = Reposter.dismissableInForeground(foreground)
+        val dismissed = HashSet<String>()
+        val now = SystemClock.elapsedRealtime()
+        val iterator = viewedSince.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            val info = candidates.firstOrNull { it.key == entry.key }
+            if (info == null) {
+                iterator.remove()
+                continue
+            }
+            if (now - entry.value < VIEW_DWELL_MS) continue
+            iterator.remove()
+            dismissed += info.key
+            cancelAutoClear(info.key)
+            Reposter.removeCompleted(this, info.key)
+            log(
+                packageName = info.packageName,
+                appLabel = info.appLabel,
+                title = info.title.ifBlank { info.text },
+                state = "已查看 · 自动关闭",
+            )
+        }
+        for (info in candidates) {
+            if (info.key !in dismissed) viewedSince.putIfAbsent(info.key, now)
         }
     }
 
@@ -187,6 +232,7 @@ class NluListenerService : NotificationListenerService() {
     companion object {
         private const val REPLACE_GRACE_MS = 5_000L
         private const val AUTO_CLEAR_DELAY_MS = 8_000L
+        private const val VIEW_DWELL_MS = 6_000L
         private const val ACTIVE_POLL_MS = 1_500L
         private const val IDLE_POLL_MS = 10_000L
     }

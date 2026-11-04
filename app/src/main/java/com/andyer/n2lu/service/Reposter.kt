@@ -94,7 +94,7 @@ object Reposter {
                 signatures[info.key] = signature
                 lastPostAt[info.key] = SystemClock.elapsedRealtime()
                 if (records.size > MAX_TRACKED) records.clear()
-                records[info.key] = Record(info.packageName, built.notification, hidden, SystemClock.elapsedRealtime())
+                records[info.key] = Record(info, built.notification, hidden, SystemClock.elapsedRealtime())
             }
             PostResult.Posted(built.promotable, chip)
         } catch (t: Throwable) {
@@ -146,7 +146,7 @@ object Reposter {
                 val entry = iterator.next()
                 val key = entry.key
                 val record = entry.value
-                if (record.sourcePackage == context.packageName) continue
+                if (record.info.packageName == context.packageName) continue
                 val stale = !record.hidden && activeTags != null &&
                     now - record.postedAt > STALE_GRACE_MS && tagOf(key) !in activeTags
                 if (stale) {
@@ -155,7 +155,7 @@ object Reposter {
                     lastPostAt.remove(key)
                     continue
                 }
-                val hide = foreground != null && record.sourcePackage == foreground
+                val hide = foreground != null && record.info.packageName == foreground
                 if (hide == record.hidden) continue
                 changes += key to record.copy(hidden = hide)
                 if (hide) toHide += key else toShow += key to record.notification
@@ -203,8 +203,27 @@ object Reposter {
 
     private class Built(val notification: Notification, val promotable: Boolean)
 
+    fun dismissableInForeground(foreground: String?): List<SourceInfo> {
+        if (foreground == null) return emptyList()
+        return synchronized(lock) {
+            records.values
+                .map { it.info }
+                .filter { it.packageName == foreground && it.isMessageLike() }
+        }
+    }
+
+    private fun SourceInfo.isMessageLike(): Boolean {
+        if (category == Notification.CATEGORY_MESSAGE ||
+            category == Notification.CATEGORY_EMAIL ||
+            category == Notification.CATEGORY_SOCIAL
+        ) {
+            return true
+        }
+        return !isOngoing && !hasProgress
+    }
+
     private data class Record(
-        val sourcePackage: String,
+        val info: SourceInfo,
         val notification: Notification,
         val hidden: Boolean,
         val postedAt: Long,
