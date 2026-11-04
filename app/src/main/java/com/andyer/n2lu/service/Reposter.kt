@@ -36,6 +36,7 @@ object Reposter {
     private val signatures = HashMap<String, String>()
     private val lastPostAt = HashMap<String, Long>()
     private val records = HashMap<String, Record>()
+    private val clearedSignatures = HashMap<String, String>()
     private val lock = Any()
 
     fun ensureChannel(context: Context) {
@@ -72,6 +73,8 @@ object Reposter {
             append(prefs.keepAfterSourceGone)
         }
         synchronized(lock) {
+            if (clearedSignatures[info.key] == signature) return PostResult.Skipped
+            clearedSignatures.remove(info.key)
             val last = lastPostAt[info.key] ?: 0L
             if (signatures[info.key] == signature && SystemClock.elapsedRealtime() - last < MIN_INTERVAL_MS) {
                 return PostResult.Skipped
@@ -106,12 +109,29 @@ object Reposter {
             signatures.remove(key)
             lastPostAt.remove(key)
             records.remove(key)
+            clearedSignatures.remove(key)
         }
     }
+
+    fun removeCompleted(context: Context, key: String) {
+        val signature = synchronized(lock) { signatures[key] }
+        synchronized(lock) {
+            if (signature != null) clearedSignatures[key] = signature
+            signatures.remove(key)
+            lastPostAt.remove(key)
+            records.remove(key)
+        }
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        runCatching { manager.cancel(tagOf(key), idOf(key)) }
+    }
+
+    fun hasRecord(key: String): Boolean = synchronized(lock) { records.containsKey(key) }
 
     fun hasRecords(): Boolean = synchronized(lock) { records.isNotEmpty() }
 
     fun applyForeground(context: Context, foreground: String?) {
+        val needed = synchronized(lock) { foreground != null || records.values.any { it.hidden } }
+        if (!needed) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         val activeTags = runCatching {
             manager.activeNotifications.mapNotNull { it.tag }.toSet()
@@ -155,7 +175,6 @@ object Reposter {
     private fun shouldHideForForeground(context: Context, info: SourceInfo, prefs: Prefs): Boolean {
         if (!prefs.hideWhenSourceForeground) return false
         if (info.packageName == context.packageName) return false
-        if (!ForegroundApps.hasAccess(context)) return false
         return ForegroundApps.currentPackage(context) == info.packageName
     }
 
@@ -178,6 +197,7 @@ object Reposter {
             signatures.clear()
             lastPostAt.clear()
             records.clear()
+            clearedSignatures.clear()
         }
     }
 

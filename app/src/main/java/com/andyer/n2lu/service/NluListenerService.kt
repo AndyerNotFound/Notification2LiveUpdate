@@ -26,6 +26,7 @@ class NluListenerService : NotificationListenerService() {
 
     private val autoClearJobs = ConcurrentHashMap<String, Job>()
 
+    @Volatile
     private var foregroundJob: Job? = null
 
     private val prefs: Prefs by lazy { Prefs.get(this) }
@@ -66,7 +67,14 @@ class NluListenerService : NotificationListenerService() {
         ensureForegroundWatcher()
         val completed = settings.autoClearOnComplete &&
             info.key != DemoPoster.DEMO_KEY &&
-            CompletionPolicy.isComplete(info.progress, info.progressMax, info.indeterminate, info.title, info.text)
+            CompletionPolicy.isComplete(
+                info.progress,
+                info.progressMax,
+                info.indeterminate,
+                info.chronometerCountDown,
+                info.title,
+                info.text,
+            )
 
         scope.launch {
             when (val result = Reposter.post(this@NluListenerService, info, settings)) {
@@ -104,7 +112,6 @@ class NluListenerService : NotificationListenerService() {
         val fromReplacement = suppressedAt != null &&
             SystemClock.elapsedRealtime() - suppressedAt < REPLACE_GRACE_MS
         if (fromReplacement) return
-        cancelAutoClear(sbn.key)
         if (!prefs.keepAfterSourceGone) {
             Reposter.removeSource(this, sbn.key)
         }
@@ -123,9 +130,7 @@ class NluListenerService : NotificationListenerService() {
                 val active = Reposter.hasRecords()
                 if (active) {
                     val settings = prefs
-                    val foreground = if (settings.hideWhenSourceForeground &&
-                        ForegroundApps.hasAccess(this@NluListenerService)
-                    ) {
+                    val foreground = if (settings.hideWhenSourceForeground) {
                         ForegroundApps.currentPackage(this@NluListenerService)
                     } else {
                         null
@@ -141,8 +146,10 @@ class NluListenerService : NotificationListenerService() {
         if (autoClearJobs[info.key]?.isActive == true) return
         autoClearJobs[info.key] = scope.launch {
             delay(AUTO_CLEAR_DELAY_MS)
-            Reposter.removeSource(this@NluListenerService, info.key)
+            val existed = Reposter.hasRecord(info.key)
+            Reposter.removeCompleted(this@NluListenerService, info.key)
             autoClearJobs.remove(info.key)
+            if (!existed) return@launch
             log(
                 packageName = info.packageName,
                 appLabel = info.appLabel,
@@ -180,7 +187,7 @@ class NluListenerService : NotificationListenerService() {
     companion object {
         private const val REPLACE_GRACE_MS = 5_000L
         private const val AUTO_CLEAR_DELAY_MS = 8_000L
-        private const val ACTIVE_POLL_MS = 1_200L
-        private const val IDLE_POLL_MS = 3_000L
+        private const val ACTIVE_POLL_MS = 1_500L
+        private const val IDLE_POLL_MS = 10_000L
     }
 }
