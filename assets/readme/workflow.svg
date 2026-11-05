@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="wf-title wf-desc">
+  <title id="wf-title">工作原理：监听 → 过滤 → 重建 → 系统判定提升</title>
+  <desc id="wf-desc">四段链路：通知监听服务读取，解析与过滤，以本应用身份重建，交给 SystemUI 判定为 Live Update；底部为三个清理行为。</desc>
+
+  <rect width="1200" height="380" rx="26" fill="#0E1626"/>
+
+  <text x="56" y="64" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="30" font-weight="700" fill="#F5F7FA">工作原理</text>
+  <text x="56" y="94" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" fill="#6F84A8">监听 → 解析 → 重建 → 提升 · 全程本地，不上传</text>
+
+  <g id="flow-cards">
+    <rect x="46" y="120" width="250" height="150" rx="16" fill="#16213A" stroke="#22304F" stroke-width="1.5"/>
+    <rect x="70" y="144" width="30" height="22" rx="11" fill="none" stroke="#5EEAD4" stroke-width="2"/>
+    <circle cx="85" cy="155" r="3" fill="#5EEAD4"/>
+    <text x="70" y="194" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="20" font-weight="700" fill="#F5F7FA">监听</text>
+    <text x="70" y="220" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#5EEAD4">NluListenerService</text>
+    <text x="70" y="246" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18" fill="#7C90B2">通知使用权</text>
+    <text x="70" y="270" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18" fill="#7C90B2">读取横幅与常驻进度</text>
+
+    <rect x="332" y="120" width="250" height="150" rx="16" fill="#16213A" stroke="#22304F" stroke-width="1.5"/>
+    <rect x="356" y="144" width="30" height="22" rx="11" fill="none" stroke="#0EA5E9" stroke-width="2"/>
+    <circle cx="371" cy="155" r="3" fill="#0EA5E9"/>
+    <text x="356" y="194" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="20" font-weight="700" fill="#F5F7FA">过滤</text>
+    <text x="356" y="220" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#0EA5E9">SourceParser · Policy</text>
+    <text x="356" y="246" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18" fill="#7C90B2">跳过媒体、通话、闹钟</text>
+    <text x="356" y="270" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18" fill="#7C90B2">群组摘要与系统通知</text>
+
+    <rect x="618" y="120" width="250" height="150" rx="16" fill="#16213A" stroke="#22304F" stroke-width="1.5"/>
+    <rect x="642" y="144" width="30" height="22" rx="11" fill="none" stroke="#4F46E5" stroke-width="2"/>
+    <circle cx="657" cy="155" r="3" fill="#4F46E5"/>
+    <text x="642" y="194" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="20" font-weight="700" fill="#F5F7FA">重建</text>
+    <text x="642" y="220" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#4F46E5">Reposter</text>
+    <text x="642" y="246" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18" fill="#7C90B2">ongoing · ProgressStyle</text>
+    <text x="642" y="270" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18" fill="#7C90B2">胶囊文字 · 静音渠道</text>
+
+    <rect x="904" y="120" width="250" height="150" rx="16" fill="#16213A" stroke="#22304F" stroke-width="1.5"/>
+    <rect x="928" y="144" width="30" height="22" rx="11" fill="none" stroke="#14B8A6" stroke-width="2"/>
+    <circle cx="943" cy="155" r="3" fill="#14B8A6"/>
+    <text x="928" y="194" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="20" font-weight="700" fill="#F5F7FA">提升</text>
+    <text x="928" y="220" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#14B8A6">SystemUI</text>
+    <text x="928" y="246" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18" fill="#7C90B2">状态栏胶囊与卡片</text>
+    <text x="928" y="270" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18" fill="#7C90B2">由系统按 Android 16 判定</text>
+  </g>
+
+  <g id="arrows" stroke="#14B8A6" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 300 195 L 324 195 M 318 189 L 328 195 L 318 201"/>
+    <path d="M 586 195 L 610 195 M 604 189 L 614 195 L 604 201"/>
+    <path d="M 872 195 L 896 195 M 890 189 L 900 195 L 890 201"/>
+  </g>
+
+  <g id="cleanup-band">
+    <rect x="46" y="286" width="352" height="72" rx="18" fill="#16213A" stroke="#22304F" stroke-width="1.5"/>
+    <text x="70" y="316" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="19" font-weight="700" fill="#F5F7FA">应用在前台时隐藏</text>
+    <text x="70" y="342" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18" fill="#7C90B2">前台期间收起 · 退出恢复</text>
+
+    <rect x="424" y="286" width="352" height="72" rx="18" fill="#16213A" stroke="#22304F" stroke-width="1.5"/>
+    <text x="448" y="316" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="19" font-weight="700" fill="#F5F7FA">查看后自动关闭</text>
+    <text x="448" y="342" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18" fill="#7C90B2">聊天类停留 6 秒视为已读</text>
+
+    <rect x="802" y="286" width="352" height="72" rx="18" fill="#16213A" stroke="#22304F" stroke-width="1.5"/>
+    <text x="826" y="316" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="19" font-weight="700" fill="#F5F7FA">完成后自动清除</text>
+    <text x="826" y="342" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18" fill="#7C90B2">进度到顶或完成语义 · 8 秒移除</text>
+  </g>
+</svg>
