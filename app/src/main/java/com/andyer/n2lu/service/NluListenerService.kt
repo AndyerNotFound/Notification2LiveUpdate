@@ -44,6 +44,7 @@ class NluListenerService : NotificationListenerService() {
         foregroundJob?.cancel()
         foregroundJob = null
         viewedSince.clear()
+        suppressedRemovals.clear()
         log(title = "通知监听已断开", state = "服务")
     }
 
@@ -63,6 +64,10 @@ class NluListenerService : NotificationListenerService() {
         val importance = if (hasRanking) ranking.importance else NotificationManager.IMPORTANCE_DEFAULT
         val info = SourceParser.parse(this, sbn, importance, channel?.id) ?: return
 
+        if (ConversionPolicy.isDisqualified(info)) {
+            if (!info.hasContent || info.isGroupSummary) dropStaleCard(info)
+            return
+        }
         if (settings.isSourceIgnored(info.key)) return
         if (settings.skipAlreadyPromoted && info.isPromoted) return
         if (!ConversionPolicy.shouldConvert(info, settings.triggerMode)) return
@@ -110,14 +115,43 @@ class NluListenerService : NotificationListenerService() {
         sbn: StatusBarNotification,
         rankingMap: NotificationListenerService.RankingMap,
     ) {
+        handleRemoved(sbn, reason = null)
+    }
+
+    override fun onNotificationRemoved(
+        sbn: StatusBarNotification,
+        rankingMap: NotificationListenerService.RankingMap,
+        reason: Int,
+    ) {
+        handleRemoved(sbn, reason)
+    }
+
+    private fun handleRemoved(sbn: StatusBarNotification, reason: Int?) {
         if (sbn.packageName == packageName) return
         val suppressedAt = suppressedRemovals.remove(sbn.key)
         val fromReplacement = suppressedAt != null &&
             SystemClock.elapsedRealtime() - suppressedAt < REPLACE_GRACE_MS
         if (fromReplacement) return
-        if (!prefs.keepAfterSourceGone) {
-            Reposter.removeSource(this, sbn.key)
+        val userHandled = reason == NotificationListenerService.REASON_CLICK ||
+            reason == NotificationListenerService.REASON_CANCEL ||
+            reason == NotificationListenerService.REASON_CANCEL_ALL ||
+            reason == NotificationListenerService.REASON_GROUP_SUMMARY_CANCELED
+        if (!userHandled && prefs.keepAfterSourceGone) return
+        val info = Reposter.sourceInfo(sbn.key)
+        viewedSince.remove(sbn.key)
+        cancelAutoClear(sbn.key)
+        Reposter.removeSource(this, sbn.key)
+        if (info == null) return
+        val state = when (reason) {
+            NotificationListenerService.REASON_GROUP_SUMMARY_CANCELED -> "所属分组被清除 · 自动清除"
+            else -> if (userHandled) "用户已处理 · 自动清除" else "源通知消失 · 自动清除"
         }
+        log(
+            packageName = info.packageName,
+            appLabel = info.appLabel,
+            title = info.title.ifBlank { info.text },
+            state = state,
+        )
     }
 
     override fun onDestroy() {
@@ -155,37 +189,53 @@ class NluListenerService : NotificationListenerService() {
 
     private fun trackViewed(foreground: String?) {
         val settings = prefs
-        if (!settings.dismissAfterViewed || foreground == null) return
+        if (!settings.dismissAfterViewed) return
+        if (foreground == null) {
+            viewedSince.clear()
+            return
+        }
         val candidates = Reposter.dismissableInForeground(foreground, packageName)
         val dismissed = HashSet<String>()
         val now = SystemClock.elapsedRealtime()
         val iterator = viewedSince.entries.iterator()
         while (iterator.hasNext()) {
             val entry = iterator.next()
-            val candidate = candidates.firstOrNull { it.info.key == entry.key }
+            val candidate = candidates.firstOrNull { it.key == entry.key }
             if (candidate == null) {
                 iterator.remove()
                 continue
             }
-            val since = maxOf(entry.value, candidate.postedAt)
-            if (now - since < VIEW_DWELL_MS) continue
+            if (now - entry.value < VIEW_DWELL_MS) continue
             iterator.remove()
-            dismissed += candidate.info.key
-            cancelAutoClear(candidate.info.key)
-            if (Reposter.removeCompleted(this, candidate.info.key)) {
+            dismissed += candidate.key
+            cancelAutoClear(candidate.key)
+            if (Reposter.removeCompleted(this, candidate.key)) {
                 log(
-                    packageName = candidate.info.packageName,
-                    appLabel = candidate.info.appLabel,
-                    title = candidate.info.title.ifBlank { candidate.info.text },
+                    packageName = candidate.packageName,
+                    appLabel = candidate.appLabel,
+                    title = candidate.title.ifBlank { candidate.text },
                     state = "已查看 · 自动关闭",
                 )
             }
         }
         for (candidate in candidates) {
-            if (candidate.info.key !in dismissed) {
-                viewedSince.putIfAbsent(candidate.info.key, now)
+            if (candidate.key !in dismissed) {
+                viewedSince.putIfAbsent(candidate.key, now)
             }
         }
+    }
+
+    private fun dropStaleCard(info: SourceInfo) {
+        val previous = Reposter.sourceInfo(info.key) ?: return
+        cancelAutoClear(info.key)
+        viewedSince.remove(info.key)
+        Reposter.removeSource(this, info.key)
+        log(
+            packageName = previous.packageName,
+            appLabel = previous.appLabel,
+            title = previous.title.ifBlank { previous.text },
+            state = "源通知已失效 · 已清除",
+        )
     }
 
     private fun scheduleAutoClear(info: SourceInfo) {

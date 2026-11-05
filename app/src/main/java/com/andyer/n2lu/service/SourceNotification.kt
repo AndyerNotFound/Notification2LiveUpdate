@@ -128,11 +128,7 @@ object ConversionPolicy {
     )
 
     fun shouldConvert(info: SourceInfo, mode: TriggerMode): Boolean {
-        if (info.packageName in skippedPackages) return false
-        if (!info.hasContent) return false
-        if (info.isGroupSummary) return false
-        if (info.hasMediaSession) return false
-        if (info.category != null && info.category in skippedCategories) return false
+        if (isDisqualified(info)) return false
         val isBanner = info.channelImportance >= NotificationManager.IMPORTANCE_HIGH
         return when (mode) {
             TriggerMode.BANNER -> isBanner
@@ -141,4 +137,11 @@ object ConversionPolicy {
             TriggerMode.ALL -> true
         }
     }
+
+    fun isDisqualified(info: SourceInfo): Boolean =
+        info.packageName in skippedPackages ||
+            !info.hasContent ||
+            info.isGroupSummary ||
+            info.hasMediaSession ||
+            (info.category != null && info.category in skippedCategories)
 }

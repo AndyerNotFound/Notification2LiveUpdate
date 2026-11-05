@@ -136,6 +136,8 @@ object Reposter {
 
     fun hasRecords(): Boolean = synchronized(lock) { records.isNotEmpty() }
 
+    fun sourceInfo(key: String): SourceInfo? = synchronized(lock) { records[key]?.info }
+
     fun applyForeground(context: Context, foreground: String?) {
         val needed = synchronized(lock) { foreground != null || records.values.any { it.hidden } }
         if (!needed) return
@@ -210,9 +212,7 @@ object Reposter {
 
     private class Built(val notification: Notification, val promotable: Boolean)
 
-    data class ViewCandidate(val info: SourceInfo, val postedAt: Long)
-
-    fun dismissableInForeground(foreground: String?, ownPackage: String): List<ViewCandidate> {
+    fun dismissableInForeground(foreground: String?, ownPackage: String): List<SourceInfo> {
         if (foreground == null) return emptyList()
         return synchronized(lock) {
             records.values
@@ -221,7 +221,7 @@ object Reposter {
                         it.info.packageName != ownPackage &&
                         ViewAckPolicy.isMessageLike(it.info.category, it.info.isOngoing, it.info.hasProgress)
                 }
-                .map { ViewCandidate(it.info, it.postedAt) }
+                .map { it.info }
         }
     }
 
