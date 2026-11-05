@@ -33,6 +33,7 @@ data class SourceInfo(
     val channelImportance: Int,
     val channelId: String?,
     val postTime: Long,
+    val actions: List<Notification.Action> = emptyList(),
 ) {
     val hasProgress: Boolean
         get() = indeterminate || (progress != null && progressMax > 0)
@@ -102,6 +103,7 @@ object SourceParser {
             channelImportance = channelImportance,
             channelId = channelId,
             postTime = sbn.postTime,
+            actions = notification.actions?.filterNotNull().orEmpty(),
         )
     }
 

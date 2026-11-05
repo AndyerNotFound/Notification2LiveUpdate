@@ -33,6 +33,7 @@ object Reposter {
     private const val STALE_GRACE_MS = 5_000L
     private const val CLEAR_TTL_MS = 60_000L
     private const val ACCENT = 0xFF14B8A6.toInt()
+    private const val MAX_FORWARDED_ACTIONS = 2
 
     private val signatures = HashMap<String, String>()
     private val lastPostAt = HashMap<String, Long>()
@@ -71,7 +72,8 @@ object Reposter {
             append(info.indeterminate).append('|')
             append(chip).append('|')
             append(prefs.showSourceApp).append('|')
-            append(prefs.keepAfterSourceGone)
+            append(prefs.keepAfterSourceGone).append('|')
+            append(prefs.forwardActions)
         }
         synchronized(lock) {
             val cleared = clearedSignatures[info.key]
@@ -279,6 +281,13 @@ object Reposter {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
             builder.setContentIntent(pending)
+        }
+
+        if (prefs.forwardActions) {
+            info.actions.asSequence()
+                .filter { it.actionIntent != null && !it.title.isNullOrBlank() }
+                .take(MAX_FORWARDED_ACTIONS)
+                .forEach { builder.addAction(it) }
         }
 
         val ignoreIntent = Intent(context, ActionReceiver::class.java)

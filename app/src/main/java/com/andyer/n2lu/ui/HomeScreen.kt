@@ -524,6 +524,12 @@ private fun AdvancedCard(
             onCheckedChange = { prefs.showSourceApp = it },
         )
         SettingSwitch(
+            title = "转发原通知按钮",
+            subtitle = "把原通知的按钮（回复 / 暂停 / 取消等）原样放到实时更新上，最多 2 个，另留 1 个「忽略」",
+            checked = prefs.forwardActions,
+            onCheckedChange = { prefs.forwardActions = it },
+        )
+        SettingSwitch(
             title = "源通知消失后保留",
             subtitle = "关闭时，原始通知被移除会同时移除转换结果",
             checked = prefs.keepAfterSourceGone,
@@ -531,7 +537,7 @@ private fun AdvancedCard(
         )
         SettingSwitch(
             title = "替换原始通知",
-            subtitle = "转换成功后移除原应用的通知，可能丢失其操作按钮",
+            subtitle = "转换成功后移除原应用的通知，避免通知栏出现两份内容",
             checked = prefs.replaceSource,
             onCheckedChange = { prefs.replaceSource = it },
         )

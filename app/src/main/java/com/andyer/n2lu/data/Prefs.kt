@@ -53,6 +53,11 @@ class Prefs private constructor(context: Context) {
         write = { putBoolean(KEY_SHOW_SOURCE, it) },
     )
 
+    var forwardActions: Boolean by cachedPref(
+        read = { sp.getBoolean(KEY_FORWARD_ACTIONS, true) },
+        write = { putBoolean(KEY_FORWARD_ACTIONS, it) },
+    )
+
     var keepAfterSourceGone: Boolean by cachedPref(
         read = { sp.getBoolean(KEY_KEEP_AFTER_GONE, false) },
         write = { putBoolean(KEY_KEEP_AFTER_GONE, it) },
@@ -151,6 +156,7 @@ class Prefs private constructor(context: Context) {
         private const val KEY_ALL_APPS = "all_apps"
         private const val KEY_ALLOWED = "allowed_packages"
         private const val KEY_SHOW_SOURCE = "show_source_app"
+        private const val KEY_FORWARD_ACTIONS = "forward_actions"
         private const val KEY_KEEP_AFTER_GONE = "keep_after_source_gone"
         private const val KEY_SKIP_PROMOTED = "skip_already_promoted"
         private const val KEY_CHIP_STYLE = "chip_style"
